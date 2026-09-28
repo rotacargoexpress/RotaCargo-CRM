@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RotaCargo Express - CRM</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    * { box-sizing: border-box; font-family: sans-serif; margin: 0; padding: 0; }
+    body { background: #f4f6f9; padding: 15px; }
+    h1 { margin-bottom: 15px; font-size: 1.4rem; color: #1a202c; }
+    .card { background: #fff; padding: 15px; border-radius: 8px; margin-bottom: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    .status { display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 0.8rem; font-weight: bold; background: #e2e8f0; }
+    .btn { background: #25d366; color: white; border: none; padding: 8px 12px; border-radius: 5px; cursor: pointer; text-decoration: none; display: inline-block; margin-top: 8px; }
+    .form-group { margin-bottom: 10px; }
+    input, select, textarea { width: 100%; padding: 8px; margin-top: 4px; border: 1px solid #ccc; border-radius: 4px; }
+  </style>
+</head>
+<body>
+
+  <h1>🚚 RotaCargo CRM</h1>
+
+  <!-- Formulário Novo Chamado -->
+  <div class="card">
+    <h3>Novo Chamado</h3>
+    <form id="formChamado">
+      <div class="form-group">
+        <label>Cliente:</label>
+        <input type="text" id="nome_cliente" required>
+      </div>
+      <div class="form-group">
+        <label>Contato (WhatsApp):</label>
+        <input type="text" id="contato" placeholder="84999999999" required>
+      </div>
+      <div class="form-group">
+        <label>Valor do Frete (R$):</label>
+        <input type="number" step="0.01" id="valor_frete">
+      </div>
+      <button type="submit" class="btn" style="background:#0066cc;">Salvar Chamado</button>
+    </form>
+  </div>
+
+  <!-- Lista de Chamados Ativos -->
+  <h2>Chamados Ativos</h2>
+  <div id="listaChamados">A carregar...</div>
+
+  <script>
+    const SUPABASE_URL = "https://rywsmocbxwswqzpbpvky.supabase.co";
+    const SUPABASE_KEY = "Sb_publishable_SbYvzz9b4w1vI1cmOhIjqw_K0xZr0Xt";
+
+    const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    // Carregar Chamados da Tabela
+    async function carregarChamados() {
+      const { data, error } = await supabase
+        .from('chamados')
+        .select('*')
+        .eq('arquivado', false)
+        .order('updated_at', { ascending: false });
+
+      if (error) {
+        console.error('Erro ao carregar:', error);
+        document.getElementById('listaChamados').innerHTML = 'Erro ao carregar chamados.';
+        return;
+      }
+
+      const container = document.getElementById('listaChamados');
+      container.innerHTML = '';
+
+      if (data.length === 0) {
+        container.innerHTML = '<p style="margin-top:10px;">Nenhum chamado ativo no momento.</p>';
+        return;
+      }
+
+      data.forEach(c => {
+        const card = document.createElement('div');
+        card.className = 'card';
+        card.innerHTML = `
+          <h3>${c.nome_cliente}</h3>
+          <p><strong>Status:</strong> <span class="status">${c.status}</span></p>
+          <p><strong>Valor:</strong> R$ ${c.valor_frete || '0.00'}</p>
+          <a class="btn" href="https://wa.me/55${c.contato.replace(/\D/g,'')}" target="_blank">📱 WhatsApp</a>
+        `;
+        container.appendChild(card);
+      });
+    }
+
+    // Criar Novo Chamado
+    document.getElementById('formChamado').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const nome_cliente = document.getElementById('nome_cliente').value;
+      const contato = document.getElementById('contato').value;
+      const valor_frete = document.getElementById('valor_frete').value || 0;
+
+      const { error } = await supabase.from('chamados').insert([
+        { nome_cliente, contato, valor_frete }
+      ]);
+
+      if (error) {
+        alert('Erro ao guardar: ' + error.message);
+      } else {
+        document.getElementById('formChamado').reset();
+        carregarChamados();
+      }
+    });
+
+    // Realtime: Sincronização automática
+    supabase
+      .channel('schema-db-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'chamados' }, () => {
+        carregarChamados();
+      })
+      .subscribe();
+
+    // Inicialização
+    carregarChamados();
+  </script>
+</body>
+</html>
